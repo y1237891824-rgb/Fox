@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#4f46e5">
+<title>My Notes</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  :root {
+    --bg:#0f172a; --card:#1e293b; --accent:#6366f1; --text:#f1f5f9; --muted:#94a3b8;
+  }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; min-height:100vh; padding:env(safe-area-inset-top) 16px calc(80px + env(safe-area-inset-bottom)); }
+  header { display:flex; justify-content:space-between; align-items:center; padding:18px 0 14px; position:sticky; top:0; background:linear-gradient(to bottom,var(--bg) 75%,transparent); z-index:10; }
+  h1 { font-size:22px; font-weight:700; }
+  h1 span { color:var(--accent); }
+  #stats { font-size:12px; color:var(--muted); }
+  .note-input { background:var(--card); border:1px solid #334155; border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+  .note-input input { background:#0f172a; border:1px solid #334155; border-radius:10px; color:var(--text); padding:12px; font-size:16px; outline:none; }
+  .note-input textarea { background:#0f172a; border:1px solid #334155; border-radius:10px; color:var(--text); padding:12px; font-size:16px; min-height:80px; resize:vertical; outline:none; font-family:inherit; }
+  .note-input input:focus, .note-input textarea:focus { border-color:var(--accent); }
+  .btn-row { display:flex; gap:10px; }
+  button { border:none; border-radius:10px; padding:12px 18px; font-size:15px; font-weight:600; cursor:pointer; }
+  #saveBtn { background:var(--accent); color:#fff; flex:1; }
+  #saveBtn:active { opacity:.85; }
+  #exportBtn { background:#334155; color:var(--text); }
+  .note { background:var(--card); border:1px solid #334155; border-radius:14px; padding:14px; margin-bottom:12px; }
+  .note h3 { font-size:16px; margin-bottom:6px; word-break:break-word; }
+  .note p { font-size:14px; color:var(--muted); white-space:pre-wrap; word-break:break-word; line-height:1.5; }
+  .note-foot { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+  .note-foot time { font-size:11px; color:#64748b; }
+  .del { background:none; color:#f87171; font-size:13px; padding:6px 10px; }
+  #empty { text-align:center; color:var(--muted); padding:40px 0; font-size:15px; }
+  #toast { position:fixed; bottom:calc(20px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%) translateY(80px); background:var(--accent); color:#fff; padding:10px 22px; border-radius:20px; font-size:14px; transition:transform .3s; z-index:20; }
+  #toast.show { transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<header>
+  <h1>📝 My <span>Notes</span></h1>
+  <div id="stats"></div>
+</header>
+
+<div class="note-input">
+  <input id="title" type="text" placeholder="Title likho..." autocomplete="off">
+  <textarea id="body" placeholder="Apna note yahan likho..."></textarea>
+  <div class="btn-row">
+    <button id="saveBtn">Save Note</button>
+    <button id="exportBtn">Export</button>
+  </div>
+</div>
+
+<div id="list"></div>
+<div id="empty">Abhi koi note nahi hai — pehla note upar likh ke Save karo! 🚀</div>
+<div id="toast">Saved ✓</div>
+
+<script>
+  const KEY = 'fox_notes_v1';
+  let notes = [];
+  try { notes = JSON.parse(localStorage.getItem(KEY)) || []; } catch(e) { notes = []; }
+
+  const $ = id => document.getElementById(id);
+
+  function save() { localStorage.setItem(KEY, JSON.stringify(notes)); }
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function render() {
+    $('stats').textContent = notes.length + ' note' + (notes.length===1?'':'s');
+    const list = $('list');
+    list.innerHTML = notes.map((n,i)=>`
+      <div class="note">
+        <h3>${esc(n.title||'(Untitled)')}</h3>
+        <p>${esc(n.body||'')}</p>
+        <div class="note-foot">
+          <time>${new Date(n.ts).toLocaleString('hi-IN')}</time>
+          <button class="del" data-i="${i}">Delete</button>
+        </div>
+      </div>`).join('');
+    $('empty').style.display = notes.length ? 'none' : 'block';
+    list.querySelectorAll('.del').forEach(b => b.onclick = () => {
+      if(confirm('Delete karna hai?')) { notes.splice(+b.dataset.i,1); save(); render(); }
+    });
+  }
+
+  $('saveBtn').onclick = () => {
+    const t = $('title').value.trim(), b = $('body').value.trim();
+    if(!t && !b) { showToast('Khaali note nahi chalega 🙂'); return; }
+    notes.unshift({ title:t, body:b, ts:Date.now() });
+    save(); render();
+    $('title').value=''; $('body').value='';
+    showToast('Saved ✓');
+  };
+
+  $('exportBtn').onclick = () => {
+    if(!notes.length){ showToast('Export ke liye kuch nahi'); return; }
+    const blob = new Blob([JSON.stringify(notes,null,2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'my-notes-backup.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('Backup download ho gaya 💾');
+  };
+
+  function showToast(msg){
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'), 1800);
+  }
+
+  render();
+</script>
+</body>
+</html>
